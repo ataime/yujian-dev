@@ -62,7 +62,7 @@ func main() {
 	http.HandleFunc("/admin/", adminPage)
 	http.HandleFunc("/upload", uploadHandler)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":80", nil))
 }
 
 func homePage(w http.ResponseWriter, r *http.Request) {

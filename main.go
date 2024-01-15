@@ -39,8 +39,8 @@ var tmpladmin *template.Template
 func init() {
 	var err error
 
-	// Initialize the database connection
-	dataSourceName := dbUser + ":" + dbPassword + "@/" + dbName
+	// dataSourceName := dbUser + ":" + dbPassword + "@/" + dbName
+	dataSourceName := fmt.Sprintf("%s:%s@tcp(db:3306)/%s", dbUser, dbPassword, dbName)
 	db, err = sql.Open("mysql", dataSourceName)
 	if err != nil {
 		log.Fatal(err)

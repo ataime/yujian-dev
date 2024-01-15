@@ -8,7 +8,7 @@
 <body>
     <div class="container">
         {{range .AvatarURLs}}
-        <img src="{{.}}" alt="User Avatar" style="height: 300px; margin: 5px;">
+        <img src="/{{.}}" alt="User Avatar" style="height: 300px; margin: 5px;">
         {{end}}
         <p>编号： {{.Code}}</p>
         <p>{{.Bio}}</p>

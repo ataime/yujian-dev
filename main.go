@@ -104,7 +104,7 @@ func userPage(w http.ResponseWriter, r *http.Request) {
 	user.AvatarURLs = strings.Split(avatarURLs, ",") // Assuming the URLs are comma-separated
 
 	for i, url := range user.AvatarURLs {
-		user.AvatarURLs[i] = fmt.Sprintf("http://localhost:8080/%s", strings.TrimSpace(url))
+		user.AvatarURLs[i] = strings.TrimSpace(url)
 	}
 
 	// Render the template with user data

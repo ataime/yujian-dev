@@ -11,7 +11,8 @@
         <img src="/{{.}}" alt="User Avatar" style="height: 300px; margin: 5px;">
         {{end}}
         <p>编号： {{.Code}}</p>
-        <p>{{.Bio}}</p>
+        <div class="hr"></div>
+        <p class="bio">{{.Bio}}</p>
     </div>
 </body>
 
@@ -23,6 +24,18 @@
         background-color: #f5f5f5;
         border-radius: 5px;
         text-align: center;
+    }
+
+    .bio,
+    .bio * {
+        text-align: left;
+    }
+
+    .hr {
+        width: 60%;
+        height: 0;
+        border: gray 1px dotted;
+        margin: 0 auto;
     }
 </style>
 

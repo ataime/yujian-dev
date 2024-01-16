@@ -23,7 +23,7 @@ const uploadPath = "./uploads"
 type User struct {
 	gorm.Model
 	Deleted    int8   `gorm:"default:0"`
-	Code       int64  `gorm:"uniqueIndex NOT NULL"`
+	Code       int64  `gorm:"uniqueIndex NOT NULL;type:bigint"`
 	AvatarURLs string `gorm:"type:text"`
 	Bio        string `gorm:"type:text"`
 }
@@ -47,8 +47,18 @@ func init() {
 
 type Profiles struct {
 	AvatarURLs []string
-	Bio        string
+	Bio        template.HTML
 	Code       int64
+}
+
+type UserList struct {
+	Users []UserOne
+}
+
+type UserOne struct {
+	Code int64  `gorm:"uniqueIndex NOT NULL"`
+	URL  string `gorm:"type:text"`
+	Bio  string `gorm:"type:text"`
 }
 
 func main() {
@@ -67,7 +77,44 @@ func main() {
 		}
 	})
 
-	router.GET("/admin", func(c *gin.Context) {
+	router.GET("/user/list/:page", func(c *gin.Context) {
+		var users []User
+		page := cast.ToInt(c.Param("page")) - 1
+		if page < 0 {
+			page = 0
+		}
+		limit := 20
+
+		fmt.Println("------page: ", page)
+
+		err := db.Where("deleted = ?", 0).Order("id").Limit(limit).Offset(page * limit).Find(&users).Error
+		if err != nil {
+			c.String(http.StatusNotFound, "User List Empty")
+			return
+		}
+
+		t, _ := template.ParseFiles("userlist.html")
+
+		var userones []UserOne
+		for _, one := range users {
+			urls := strings.Split(one.AvatarURLs, ",")
+			url := ""
+			if len(urls) > 0 {
+				url = urls[0]
+			}
+			userones = append(userones, UserOne{Code: one.Code, URL: url})
+		}
+		ones := UserList{Users: userones}
+
+		fmt.Printf("ones : %+v", ones)
+
+		err = t.Execute(c.Writer, ones)
+		if err != nil {
+			panic(err)
+		}
+	})
+
+	router.GET("/add", func(c *gin.Context) {
 		t, _ := template.ParseFiles("uploadpage.html")
 		err := t.Execute(c.Writer, nil)
 		if err != nil {
@@ -78,8 +125,7 @@ func main() {
 	router.GET("/user/:code", func(c *gin.Context) {
 		var user User
 		code := c.Param("code")
-		fmt.Println("---code: ", code)
-		result := db.Where("code = ?", code).Where("deleted = ?", 0).First(&user, "code = ?", code)
+		result := db.Where("code = ?", code).Where("deleted = ?", 0).First(&user)
 		if result.Error == gorm.ErrRecordNotFound {
 			c.String(http.StatusNotFound, "User not found")
 			return
@@ -87,7 +133,7 @@ func main() {
 		t, _ := template.ParseFiles("userprofile.html")
 		profiles := Profiles{
 			AvatarURLs: strings.Split(user.AvatarURLs, ","),
-			Bio:        user.Bio,
+			Bio:        template.HTML(user.Bio),
 			Code:       user.Code,
 		}
 		err := t.Execute(c.Writer, profiles)

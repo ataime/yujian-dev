@@ -23,7 +23,7 @@ const uploadPath = "./uploads"
 type User struct {
 	gorm.Model
 	Deleted    int8   `gorm:"default:0"`
-	Code       int64  `gorm:"uniqueIndex NOT NULL;type:bigint"`
+	Code       int64  `gorm:"unique;type:bigint"`
 	AvatarURLs string `gorm:"type:text"`
 	Bio        string `gorm:"type:text"`
 }
@@ -35,12 +35,11 @@ var (
 func init() {
 	var err error
 	// dsn := fmt.Sprintf("root:123456@tcp(db:3306)/meetyou?charset=utf8mb4&parseTime=True&loc=Local")
-	dsn := fmt.Sprintf("root:123456@tcp(127.0.0.1:3306)/meetyou?charset=utf8mb4&parseTime=True&loc=Local")
+	dsn := fmt.Sprintf("root:uy&tr$e189@tcp(127.0.0.1:3306)/meetyou?charset=utf8mb4&parseTime=True&loc=Local")
 	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	db.AutoMigrate(&User{})
 	// db.Save(&User{Code: "yujian", AvatarURLs: "https://i.pravatar.cc/300", Bio: "I am an engineer"})
 }
@@ -84,9 +83,6 @@ func main() {
 			page = 0
 		}
 		limit := 20
-
-		fmt.Println("------page: ", page)
-
 		err := db.Where("deleted = ?", 0).Order("id").Limit(limit).Offset(page * limit).Find(&users).Error
 		if err != nil {
 			c.String(http.StatusNotFound, "User List Empty")
@@ -105,9 +101,7 @@ func main() {
 			userones = append(userones, UserOne{Code: one.Code, URL: url})
 		}
 		ones := UserList{Users: userones}
-
-		fmt.Printf("ones : %+v", ones)
-
+		// fmt.Printf("ones : %+v", ones)
 		err = t.Execute(c.Writer, ones)
 		if err != nil {
 			panic(err)
@@ -153,16 +147,19 @@ func uploadHandler(c *gin.Context) {
 	// 解析表单
 	bio := c.PostForm("bio")
 	code := cast.ToInt64(c.PostForm("code"))
-
 	form, err := c.MultipartForm()
 	if err != nil {
 		c.String(http.StatusBadRequest, "Error parsing multipart form")
 		return
 	}
-
 	files := form.File["images[]"]
+	for _, file := range files {
+		// 处理文件，例如保存到服务器
+		filename := file.Filename
+		// 可以添加更多的文件处理逻辑，如保存文件等
+		fmt.Println("Received file:", filename)
+	}
 	var urls []string
-
 	for _, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {

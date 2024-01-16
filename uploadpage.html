@@ -9,6 +9,7 @@
 </head>
 
 <body>
+
     <div class="container">
         <form id="uploadForm" enctype="multipart/form-data">
             <div>
@@ -18,59 +19,75 @@
 
             <div>
                 <label for="bio">简介:</label>
-                <!-- 编辑器容器 -->
                 <div id="editor"></div>
-                <!-- 引入Quill库 -->
-                <script src="/statics/quill.js"></script>
-                <script>
-                    var quill = new Quill('#editor', {
-                        theme: 'snow'  // 使用snow主题
-                    });
-                </script>
             </div>
+
             <div>
                 <label for="image">上传多张图片:</label>
                 <input type="file" id="image" name="image" accept="image/*" multiple>
                 <br />
+                <div class="btn">
+                    <button type="button" onclick="addImage()">添加图片</button>
+                    <input type="button" value="提交" onclick="uploadImages()">
+                </div>
             </div>
-
-            <input type="button" value="提交" onclick="uploadImages()">
         </form>
+        <div id="selectedImages"></div>
     </div>
 </body>
 
+<script src="/statics/quill.js"></script>
 <script>
+    var quill = new Quill('#editor', {
+        theme: 'snow'
+    });
+
+    var images = [];
+
+    function addImage() {
+        var fileInput = document.getElementById('image');
+        if (fileInput.files.length > 0) {
+            Array.from(fileInput.files).forEach(file => {
+                images.push(file);
+                var imgContainer = document.getElementById('selectedImages');
+
+                var img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.style.height = '100px'; // Adjust the size as needed
+                img.style.marginRight = '10px';
+                imgContainer.appendChild(img);
+            });
+            fileInput.value = ''; // 清空输入以便再次使用
+        }
+        console.log(images);
+    }
+
     function uploadImages() {
         var formData = new FormData(document.getElementById('uploadForm'));
+        // 添加图片到表单数据
+        images.forEach((image) => {
+            formData.append('images[]', image, image.name);
+        });
 
-        // 获取Quill编辑器的内容
-        var resumeContent = quill.root.innerHTML;
-        formData.append('bio', resumeContent);
+        // 添加其他表单数据
+        formData.append('bio', quill.root.innerHTML);
+        formData.append('code', document.getElementById('code').value);
+        console.log(formData)
 
-        // 处理图片
-        var fileInput = document.getElementById('image');
-        for (var i = 0; i < fileInput.files.length; i++) {
-            formData.append('images[]', fileInput.files[i], fileInput.files[i].name);
-        }
-
-        fetch('http://localhost/upload', {
+        fetch('/upload', {
             method: 'POST',
             body: formData
         })
-            .then(response => {
-                if (!response.ok) {
-                    alert("上传失败");
-                    throw new Error('Network response was not ok: ' + response.statusText);
-                } else {
-                    alert("上传成功");
-                }
-                return response.text();
-            })
+            .then(response => response.text())
             .then(data => {
                 console.log(data);
+                alert('上传成功！');
+                images = []; // 清空图片数组
+                // document.getElementById('selectedImages').innerHTML = ''; // 清空图片预览
             })
             .catch(error => {
-                console.error('Error:', error);
+                console.error('上传失败:', error);
+                alert('上传失败！');
             });
     }
 </script>
@@ -82,6 +99,11 @@
         padding: 20px;
         background-color: #f5f5f5;
         border-radius: 5px;
+    }
+
+    .btn {
+        display: flex;
+        justify-content: space-around;
     }
 </style>
 

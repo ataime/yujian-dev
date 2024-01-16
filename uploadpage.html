@@ -4,18 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <title>User Profile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/statics/quill.snow.css" rel="stylesheet">
 </head>
 
 <body>
-
     <div class="container">
-
         <form id="uploadForm" enctype="multipart/form-data">
-            <div>
-                <label for="pass">口令:</label>
-                <input type="password" id="pass" name="pass"></input>
-            </div>
-
             <div>
                 <label for="code">编号:</label>
                 <input type="text" id="code" name="code"></input>
@@ -23,7 +18,23 @@
 
             <div>
                 <label for="bio">简介:</label>
-                <textarea id="bio" name="bio"></textarea>
+                <!-- 编辑器容器 -->
+                <div id="editor"></div>
+                <!-- 提交按钮 -->
+                <button id="submit-button">提交简历</button>
+                <!-- 引入Quill库 -->
+                <script src="/statics/quill.js"></script>
+                <script>
+                    var quill = new Quill('#editor', {
+                        theme: 'snow'  // 使用snow主题
+                    });
+                    document.getElementById('submit-button').addEventListener('click', function () {
+                        var resumeContent = quill.root.innerHTML;
+                        console.log("提交的简历内容: ", resumeContent);
+                        // 这里可以将 resumeContent 发送到服务器
+                        // 例如使用 AJAX 或其他方法
+                    });
+                </script>
             </div>
             <div>
                 <label for="image">上传多张图片:</label>

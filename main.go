@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"html/template"
 	"io"
@@ -10,193 +9,169 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/gin-gonic/gin"
+	"github.com/spf13/cast"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 const uploadPath = "./uploads"
 
-// User struct to hold user data
 type User struct {
-	Code       string
-	AvatarURLs []string
-	Bio        string
+	gorm.Model
+	Deleted    int8   `gorm:"default:0"`
+	Code       int64  `gorm:"uniqueIndex NOT NULL"`
+	AvatarURLs string `gorm:"type:text"`
+	Bio        string `gorm:"type:text"`
 }
 
-const (
-	dbUser     = "root"
-	dbPassword = "123456"
-	dbName     = "yujian"
+var (
+	db *gorm.DB
 )
-
-var db *sql.DB
-var tmpluser *template.Template
-var tmpladmin *template.Template
 
 func init() {
 	var err error
-
-	// dataSourceName := dbUser + ":" + dbPassword + "@/" + dbName
-	dataSourceName := fmt.Sprintf("%s:%s@tcp(db:3306)/%s", dbUser, dbPassword, dbName)
-	db, err = sql.Open("mysql", dataSourceName)
+	// dsn := fmt.Sprintf("root:123456@tcp(db:3306)/meetyou?charset=utf8mb4&parseTime=True&loc=Local")
+	dsn := fmt.Sprintf("root:123456@tcp(127.0.0.1:3306)/meetyou?charset=utf8mb4&parseTime=True&loc=Local")
+	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Initialize the HTML template
-	tmpluser = template.Must(template.ParseFiles("userprofile.html"))
-	tmpladmin = template.Must(template.ParseFiles("uploadpage.html"))
+	db.AutoMigrate(&User{})
+	// db.Save(&User{Code: "yujian", AvatarURLs: "https://i.pravatar.cc/300", Bio: "I am an engineer"})
+}
+
+type Profiles struct {
+	AvatarURLs []string
+	Bio        string
+	Code       int64
 }
 
 func main() {
+	router := gin.Default()
+	router.Static("/uploads", "./uploads")
+	router.Static("/statics", "./statics")
+	router.GET("/", homePage)
+	router.POST("/upload", uploadHandler)
 
-	// 设置静态文件服务
-	fs := http.FileServer(http.Dir("./uploads"))
-	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
+	// 定义路由和处理函数
+	router.GET("/tmp", func(c *gin.Context) {
+		t, _ := template.ParseFiles("header.html", "footer.html")
+		err := t.Execute(c.Writer, map[string]string{"Title": "My titleXXXXXXXX", "Body": "Hi this is my body"})
+		if err != nil {
+			panic(err)
+		}
+	})
 
-	http.HandleFunc("/", homePage)
-	http.HandleFunc("/user/", userPage)
-	http.HandleFunc("/admin/", adminPage)
-	http.HandleFunc("/upload", uploadHandler)
+	router.GET("/admin", func(c *gin.Context) {
+		t, _ := template.ParseFiles("uploadpage.html")
+		err := t.Execute(c.Writer, nil)
+		if err != nil {
+			panic(err)
+		}
+	})
 
-	log.Fatal(http.ListenAndServe(":80", nil))
+	router.GET("/user/:code", func(c *gin.Context) {
+		var user User
+		code := c.Param("code")
+		fmt.Println("---code: ", code)
+		result := db.Where("code = ?", code).Where("deleted = ?", 0).First(&user, "code = ?", code)
+		if result.Error == gorm.ErrRecordNotFound {
+			c.String(http.StatusNotFound, "User not found")
+			return
+		}
+		t, _ := template.ParseFiles("userprofile.html")
+		profiles := Profiles{
+			AvatarURLs: strings.Split(user.AvatarURLs, ","),
+			Bio:        user.Bio,
+			Code:       user.Code,
+		}
+		err := t.Execute(c.Writer, profiles)
+		if err != nil {
+			panic(err)
+		}
+	})
+
+	log.Fatal(router.Run(":80"))
 }
 
-func homePage(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Welcome to the User Profile App"))
+func homePage(c *gin.Context) {
+	c.String(http.StatusOK, "欢迎使用我的应用")
 }
 
-func adminPage(w http.ResponseWriter, r *http.Request) {
-	// Render the template with user data
-	err := tmpladmin.Execute(w, nil)
+func uploadHandler(c *gin.Context) {
+	// 解析表单
+	bio := c.PostForm("bio")
+	code := cast.ToInt64(c.PostForm("code"))
+
+	form, err := c.MultipartForm()
 	if err != nil {
-		log.Println("Error executing template:", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
-}
-
-func userPage(w http.ResponseWriter, r *http.Request) {
-	userIDStr := r.URL.Path[len("/user/"):]
-	userID, err := strconv.Atoi(userIDStr)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Error parsing multipart form")
 		return
 	}
 
-	// Query the database for the user
-	var user User
-	var avatarURLs string
-	row := db.QueryRow("SELECT code, avatar_urls, bio FROM users WHERE id = ?", userID)
-	err = row.Scan(&user.Code, &avatarURLs, &user.Bio)
-	if err == sql.ErrNoRows {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		log.Println("Error querying database:", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Split the avatar URLs
-	user.AvatarURLs = strings.Split(avatarURLs, ",") // Assuming the URLs are comma-separated
-
-	for i, url := range user.AvatarURLs {
-		user.AvatarURLs[i] = strings.TrimSpace(url)
-	}
-
-	// Render the template with user data
-	err = tmpluser.Execute(w, user)
-	if err != nil {
-		log.Println("Error executing template:", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
-}
-
-// processFile 处理并保存上传的文件
-func processFile(file multipart.File, newFileName string) (string, error) {
-	// 确保上传目录存在
-	err := os.MkdirAll(uploadPath, os.ModePerm)
-	if err != nil {
-		return "", err
-	}
-
-	// 创建文件的路径
-	filePath := filepath.Join(uploadPath, newFileName)
-
-	// 创建新文件
-	dst, err := os.Create(filePath)
-	if err != nil {
-		return "", err
-	}
-	defer dst.Close()
-
-	// 将上传的文件复制到新文件
-	_, err = io.Copy(dst, file)
-	if err != nil {
-		return "", err
-	}
-
-	return filePath, nil
-}
-func uploadHandler(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseMultipartForm(10 << 20) // 10 MB
-	if err != nil {
-		http.Error(w, "Error parsing multipart form", http.StatusBadRequest)
-		return
-	}
-
-	bio := r.FormValue("bio")
-	fmt.Println(bio)
-
-	code := r.FormValue("code")
-	fmt.Println("code: ", code)
-
-	pass := r.FormValue("pass")
-	fmt.Println("pass: ", pass)
-
-	if pass != "yujian" {
-		http.Error(w, "Incorrect password", http.StatusBadRequest)
-		return
-	}
-
-	files := r.MultipartForm.File["images[]"]
+	files := form.File["images[]"]
 	var urls []string
+
 	for _, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
-			http.Error(w, "Error opening file", http.StatusInternalServerError)
+			c.String(http.StatusInternalServerError, "Error opening file")
 			return
 		}
 		defer file.Close()
-		// 使用时间戳生成新的文件名
+		// 生成新的文件名
 		ext := filepath.Ext(fileHeader.Filename)
 		newFileName := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
 
 		// 保存文件
 		filePath, err := processFile(file, newFileName)
 		if err != nil {
-			http.Error(w, "Error saving file.", http.StatusInternalServerError)
+			c.String(http.StatusInternalServerError, "Error saving file")
 			return
 		}
 
-		// 将文件路径添加到 URLs 列表
+		// 添加文件路径到 URLs 列表
 		urls = append(urls, filePath)
-		// 可以输出文件名来确认文件已收到
 		fmt.Println("Received file:", fileHeader.Filename)
 	}
-	fmt.Println(urls)
-	imgstr := strings.Join(urls, ",")
 
-	rs, err := db.Exec("insert into users(code,avatar_urls,bio) values(?,?,?)", code, imgstr, bio)
-	fmt.Println(err)
+	imgStr := strings.Join(urls, ",")
+	user := User{Code: code, AvatarURLs: imgStr, Bio: bio, Deleted: 0}
 
-	rowCount, err := rs.RowsAffected()
-	fmt.Println(err)
+	// 将数据保存到数据库
+	result := db.Create(&user)
+	if result.Error != nil {
+		c.String(http.StatusInternalServerError, "Error saving to database")
+		return
+	}
 
-	fmt.Println("Affected rows: ", rowCount)
+	fmt.Fprintf(c.Writer, "Upload successful")
+}
 
-	fmt.Fprintf(w, "Upload successful")
+// processFile 处理并保存上传的文件
+func processFile(file multipart.File, newFileName string) (string, error) {
+	err := os.MkdirAll(uploadPath, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
+
+	filePath := filepath.Join(uploadPath, newFileName)
+
+	dst, err := os.Create(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, file)
+	if err != nil {
+		return "", err
+	}
+
+	return filePath, nil
 }
